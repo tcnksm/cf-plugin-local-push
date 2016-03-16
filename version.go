@@ -8,6 +8,10 @@ import (
 
 const Name string = "local-push"
 
+// Describe latest commit hash.
+// This is automatically extracted by git describe --always.
+var GitCommit string = ""
+
 var Version = plugin.VersionType{
 	Major: 0,
 	Minor: 1,

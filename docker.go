@@ -8,12 +8,15 @@ import (
 
 type Docker struct {
 	OutStream io.Writer
+	InStream  io.Reader
 	Discard   bool
 }
 
 // docker runs docker command
 func (d *Docker) execute(args ...string) error {
 	cmd := exec.Command("docker", args...)
+
+	cmd.Stdin = d.InStream
 	cmd.Stderr = d.OutStream
 	cmd.Stdout = d.OutStream
 

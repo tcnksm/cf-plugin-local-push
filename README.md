@@ -2,13 +2,13 @@
 
 [license]: /LICENSE
 
-`cf-plugin-local-push` is a [cloudfoundry/cli](https://github.com/cloudfoundry/cli) plugin. It allows you to push your cloudfoundry application to your local docker container with actual [buildpacks](http://docs.cloudfoundry.org/buildpacks/) :whale:. This plugin manipulates [DEA](https://docs.cloudfoundry.org/concepts/architecture/execution-agent.html) (where cf application is runnging) enviroment. So this can be used for setting up very light weight debug environment for application developers. And power of docker build cache, start up application is really *fast*.
+`cf-plugin-local-push` is a [cloudfoundry/cli](https://github.com/cloudfoundry/cli) plugin. It allows you to push your cloudfoundry application to your local docker container with actual [buildpacks](http://docs.cloudfoundry.org/buildpacks/) :whale:. This plugin manipulates [DEA](https://docs.cloudfoundry.org/concepts/architecture/execution-agent.html) (where cf application is runnging) enviroment. This can be used for setting up very light weight debug environment for application developers or running unit tests. And power of docker build cache, start up application is really *fast*.
 
 This plugin is still *PoC*, so please be careful to use this plugin.  
 
 ## Why?
 
-Why we need this? Because the application developers (at least, me) want to debug their cf app on local environment before `push`-ing to actual environment. Since it's faster and you don't need care about breaking the app or wasting resources (you may not be able to connect CF inside DC), it's important to have local development environment.
+Why we need this? Because the application developers (at least, me) want to debug their cf app on local environment before `push` to actual environment. Since it's faster and you don't need care about breaking the app or wasting resources (you may not have internet access when they need to run it), it's important to have local development environment.
 
 Cloudfoundry community provides [bosh-lite](https://github.com/cloudfoundry/bosh-lite) for local dev environment for BOSH using warden containers. But for me, it's too heavy and not for **user**. It's only for CF operators. 
 
@@ -49,6 +49,12 @@ $ cf local-push
 
 ```bash
 $ curl $(docker-machine ip):8080
+```
+
+While container is running, you can enter the container and can see what's happening there,
+
+```bash
+$ cf local-push -enter
 ```
 
 ## VS.
