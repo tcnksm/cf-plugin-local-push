@@ -5,12 +5,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
 
 	"github.com/cloudfoundry/cli/plugin"
 	"github.com/tcnksm/go-input"
+	"gopkg.in/yaml.v2"
 )
 
 // Exit codes are int values that represent an exit code
@@ -37,6 +39,27 @@ const (
 	// DockerUser to exec command to container
 	DockerUser = "vcap"
 )
+
+type Manifest struct {
+	Applications []Application			`yaml: "applications"`
+}
+
+type Application struct {
+	Name 						string 									`yaml: "name"`
+	Memory	 				string 									`yaml: "memory"`
+	Instances 			string 									`yaml: "instances"`
+	Domain					string 									`yaml: "domain"`
+	Host						string									`yaml: "host"`
+	Env			 				map[string]string				`yaml: "env"`
+}
+
+func (m *Manifest) Parse (data []byte, p LocalPush) int {
+	if err := yaml.Unmarshal(data, m); err != nil {
+		fmt.Fprintf(p.OutStream, "Errpr: [%s]", err)
+		return ExitCodeError
+	}
+	return ExitCodeOK
+}
 
 // dockerfileText is used for build docker image for target application.
 var dockerfileText = `FROM tcnksm/cf-buildstep:latest
@@ -138,6 +161,18 @@ func (p *LocalPush) run(ctx *CLIContext, args []string) int {
 		InStream:  p.InStream,
 		Discard:   false,
 	}
+
+	//Read the manifest.yml, if present
+	data, err := ioutil.ReadFile("manifest.yml")
+	if err != nil {
+		fmt.Fprintln(p.OutStream, "No manfest.yml was found!")
+	}
+	manifestFile, err := os.Open("manifest.yml")
+	appPath,err := filepath.Abs(filepath.Dir(manifestFile.Name()))
+
+
+	manifest := Manifest{}
+	manifest.Parse(data, *p)
 
 	// Check docker is installed or not.
 	if _, err := exec.LookPath("docker"); err != nil {
@@ -296,7 +331,7 @@ Options:
                   You must use this option after exec 'local-push' and
                   while running. You can regard this as 'ssh'.
 
-  -version        Show version and quit.          
+  -version        Show version and quit.
 `
 	return text
 }
