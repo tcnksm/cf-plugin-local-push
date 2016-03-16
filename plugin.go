@@ -14,6 +14,7 @@ import (
 	"github.com/cloudfoundry/cli/plugin"
 	"github.com/tcnksm/go-input"
 	"gopkg.in/yaml.v2"
+	"github.com/fatih/color"
 )
 
 // Exit codes are int values that represent an exit code
@@ -72,7 +73,7 @@ CMD /start web`
 // Debugf prints debug output when EnvDebug is given
 func Debugf(format string, args ...interface{}) {
 	if env := os.Getenv(EnvDebug); len(env) != 0 {
-		fmt.Fprintf(os.Stdout, "[DEBUG] "+format+"\n", args...)
+		fmt.Fprintf(os.Stdout, color.CyanString("[DEBUG] "+format+"\n"), args...)
 	}
 }
 
@@ -86,6 +87,7 @@ type LocalPush struct {
 func (p *LocalPush) Run(cliConn plugin.CliConnection, arg []string) {
 	Debugf("Run local-push plugin")
 	Debugf("Arg: %#v", arg)
+
 
 	// Ensure local-push is called.
 	// Plugin is also called when install/uninstall via cf command.
@@ -161,12 +163,13 @@ func (p *LocalPush) run(ctx *CLIContext, args []string) int {
 		OutStream: p.OutStream,
 		InStream:  p.InStream,
 		Discard:   false,
+		Endpoint:	 os.Getenv("DOCKER_HOST"),
 	}
 
 	//Read the manifest.yml, if present
 	data, err := ioutil.ReadFile("manifest.yml")
 	if err != nil {
-		fmt.Fprintln(p.OutStream, "No manfest.yml was found!")
+		fmt.Fprintln(p.OutStream, color.RedString("No manfest.yml was found!"))
 	}
 	manifestFile, err := os.Open("manifest.yml")
 	appPath,err := filepath.Abs(filepath.Dir(manifestFile.Name()))
@@ -178,13 +181,13 @@ func (p *LocalPush) run(ctx *CLIContext, args []string) int {
 
 	// Check docker is installed or not.
 	if _, err := exec.LookPath("docker"); err != nil {
-		fmt.Fprintf(p.OutStream, "docker command is not found in your $PATH. Install it before.\n")
+		fmt.Fprintf(p.OutStream, color.RedString("docker command is not found in your $PATH. Install it before.\n"))
 		return ExitCodeError
 	}
 
 	// Enter the container
 	if enter {
-		fmt.Fprintf(p.OutStream, "(cf-local-push) Enter container\n")
+		fmt.Fprintf(p.OutStream, color.GreenString("(cf-local-push) Enter container\n"))
 		err := docker.execute("exec",
 			"--interactive",
 			"--tty",
@@ -194,7 +197,7 @@ func (p *LocalPush) run(ctx *CLIContext, args []string) int {
 		)
 
 		if err != nil {
-			fmt.Fprintf(p.OutStream, "Failed to enter the container %s: %s", container, err)
+			fmt.Fprintf(p.OutStream, color.RedString("Failed to enter the container %s: %s", container, err))
 			return ExitCodeError
 		}
 
@@ -204,8 +207,8 @@ func (p *LocalPush) run(ctx *CLIContext, args []string) int {
 	// Check Dockerfile is exist or not.
 	// If it's exist, ask user to overwriting.
 	if _, err := os.Stat(Dockerfile); !os.IsNotExist(err) {
-		fmt.Fprintf(p.OutStream, "Dockerfile is already exist\n")
-		query := "Overwrite Dockerfile? [yN]"
+		fmt.Fprintf(p.OutStream, color.YellowString("Dockerfile is already exist\n"))
+		query := color.YellowString("Overwrite Dockerfile? [yN]")
 		ans, err := ui.Ask(query, &input.Options{
 			Default:     "N",
 			HideDefault: true,
@@ -214,25 +217,25 @@ func (p *LocalPush) run(ctx *CLIContext, args []string) int {
 			Loop:        true,
 			ValidateFunc: func(s string) error {
 				if s != "y" && s != "N" {
-					return fmt.Errorf("input must be 'y' or 'N'")
+					return fmt.Errorf(color.RedString("input must be 'y' or 'N'"))
 				}
 				return nil
 			},
 		})
 
 		if err != nil {
-			fmt.Fprintf(p.OutStream, "Failed to read input: %s\n", err)
+			fmt.Fprintf(p.OutStream, color.RedString("Failed to read input: %s\n", err))
 			return ExitCodeError
 		}
 
 		// Stop execution
 		if ans != "y" {
-			fmt.Fprintf(p.OutStream, "Aborting\n")
+			fmt.Fprintf(p.OutStream, color.RedString("Aborting\n"))
 			return ExitCodeOK
 		}
 	}
 
-	fmt.Fprintf(p.OutStream, "(cf-local-push) Generate Dockerfile\n")
+	fmt.Fprintf(p.OutStream, color.GreenString("(cf-local-push) Generate Dockerfile\n"))
 	f, err := os.Create("Dockerfile")
 	if err != nil {
 		fmt.Fprintf(p.OutStream, "%s\n", err)
@@ -244,32 +247,38 @@ func (p *LocalPush) run(ctx *CLIContext, args []string) int {
 		return ExitCodeError
 	}
 
-	fmt.Fprintf(p.OutStream, "(cf-local-push) Start building docker image\n")
+	fmt.Fprintf(p.OutStream, color.GreenString("(cf-local-push) Start building docker image\n"))
 
 	if err := docker.execute("build", "-t", image, "."); err != nil {
 		fmt.Fprintf(p.OutStream, "%s\n", err)
 		return ExitCodeError
 	}
 
-	fmt.Fprintf(p.OutStream, "(cf-local-push) Start running docker container\n")
+	//gather up our environment variables from the parsed manifest.yml file
+	envs := []string{}
+	for key, val := range manifest.Applications[0].Env {
+		envs = append(envs, fmt.Sprintf("%s=%s", key, val))
+	}
+
+	Debugf("Discovered env vars from manifest.yml: %s", envs)
+
+	fmt.Fprintf(p.OutStream, color.GreenString("(cf-local-push) Starting and attaching to docker container\n"))
 
 	// errCh
 	errCh := make(chan error, 1)
 
 	// port mapping settings
-	portMap := fmt.Sprintf("%s:%s", port, port)
+	//portMap := fmt.Sprintf("%s:%s", port, port)
 	portEnv := fmt.Sprintf("PORT=%s", port)
 	portEnvVcap := fmt.Sprintf("VCAP_APP_PORT=%s", port)
 
+	envs = append(envs, portEnv)
+	envs = append(envs, portEnvVcap)
+
 	go func() {
-		Debugf("Run command: docker run -p %s -e %s -e %s--name %s %s",
-			portMap, portEnv, portEnvVcap, container, image)
-		errCh <- docker.execute("run",
-			"-p", portMap,
-			"-e", portEnv,
-			"-e", portEnvVcap,
-			"--name", container,
-			image)
+		// Debugf("Run command: docker run -p %s -e %s -e %s--name %s %s",
+		// 	portMap, portEnv, portEnvVcap, container, image)
+		errCh <- docker.createAndRun(image, envs, port)
 	}()
 
 	sigCh := make(chan os.Signal)
@@ -277,7 +286,7 @@ func (p *LocalPush) run(ctx *CLIContext, args []string) int {
 
 	select {
 	case <-sigCh:
-		fmt.Fprintf(p.OutStream, "Interrupt: Stop and remove container (It takes a few seconds...")
+		fmt.Fprintln(p.OutStream, color.GreenString("Interrupt: Stop and remove container (It takes a few seconds...)"))
 
 		// Don't output
 		docker.Discard = true
@@ -289,7 +298,7 @@ func (p *LocalPush) run(ctx *CLIContext, args []string) int {
 		return ExitCodeOK
 	case err := <-errCh:
 		if err != nil {
-			fmt.Fprintf(p.OutStream, "Failed to run container %s: %s\n", container, err)
+			fmt.Fprintf(p.OutStream, color.RedString("Failed to run container %s: %s\n", container, err))
 			return ExitCodeError
 		}
 		return ExitCodeOK
