@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 
 	"github.com/cloudfoundry/cli/plugin"
 	"github.com/tcnksm/go-input"
@@ -169,6 +170,7 @@ func (p *LocalPush) run(ctx *CLIContext, args []string) int {
 	}
 	manifestFile, err := os.Open("manifest.yml")
 	appPath,err := filepath.Abs(filepath.Dir(manifestFile.Name()))
+	Debugf("App content path: %s", appPath)
 
 
 	manifest := Manifest{}
