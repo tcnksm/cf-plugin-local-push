@@ -3,3 +3,4 @@ out/
 .envrc
 *.test
 sample/Dockerfile
+.atomenv.json
